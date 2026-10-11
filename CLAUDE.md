@@ -36,6 +36,12 @@ Browser app for browsing and watching videos from the official English Peppa Pig
     - The first run fetches everything and saves `nextPageToken` after each page, so an interrupted sync resumes.
     - Once `complete`, refreshes walk from the newest page and stop at the first page containing an already-known id. This runs on load if `lastSync` is older than 1h, or via the "새 영상 확인" button.
     - Catalog items are stored minimally (`id/title/publishedAt/duration`). Thumbnail URL and channel name are derived in `toVideo()` to keep localStorage small.
+  - **Korean search** (`search.js`, `ko-dictionary.js`) — `compileQuery()` turns the query into AND-groups.
+    - Korean words are translated through the dictionary, and each Korean term becomes an OR-group of English words. Typed English tokens stay plain substring matches.
+    - Korean is matched greedily, longest key first, ignoring spaces, so "아빠 돼지" equals "아빠돼지". Leftover Korean runs are split at spaces and stripped of trailing particles from `KO_NOISE`; anything still 2+ chars is reported as `unknown`. A single-char particle is stripped only once, so "뽀로로" stays intact.
+    - English dictionary words match as whole words, allowing a trailing s/es/'s. The regex avoids lookbehind for old TV browsers.
+    - If only unknown Korean was typed, nothing matches (`matchesNothing`).
+    - To unit-test, copy both files into a dir with `{"type":"module"}` in package.json and import from Node.
   - **Title search, date filter and sort are all client-side** over the catalog, so they cost no quota. Cards render in chunks of `RENDER_STEP` with a "더 보기" button.
   - **Playback / progress tracking**: the YouTube IFrame Player API runs inside a `<dialog>`. Position is saved every 2s while playing, on pause, on close, and on `pagehide`. The `ENDED` state forces completion.
   - **Status rules** (`statusOf`): completed if the `ENDED` event fired, ≥95% watched, or ≤10s remaining; watching if position ≥3s; otherwise unwatched. Once completed, a video never goes back to watching on rewatch. Users can reset it or mark it completed from the player footer.

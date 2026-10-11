@@ -4,6 +4,9 @@
 //   (search.list는 호출당 100 유닛이라 쓰지 않는다)
 // - 재생/진행률 추적: YouTube IFrame Player API
 // - 시청 기록: localStorage (브라우저별 저장)
+// - 한글 검색: search.js + ko-dictionary.js (단어장으로 영어 제목에서 찾기)
+
+import { compileQuery, matchTitle } from './search.js';
 
 const API_BASE = 'https://www.googleapis.com/youtube/v3';
 const CHANNEL_ID = 'UCAOtE1V7Ots4DjM8JLlrYgg'; // Peppa Pig - Official Channel (영어)
@@ -258,22 +261,21 @@ function syncIfStale() {
 }
 
 // ---------- list building ----------
-function matchesQuery(video, tokens) {
-  if (!tokens.length) return true;
-  const title = (video.title || '').toLowerCase();
-  return tokens.every((t) => title.includes(t));
-}
-
-function queryTokens() {
-  return state.query.toLowerCase().split(/\s+/).filter(Boolean);
+// 검색어 해석 결과는 검색어가 바뀔 때만 다시 만든다 (한글은 단어장으로 영어로 바꿔 찾는다)
+let compiledQuery = { query: null, value: null };
+function currentQuery() {
+  if (compiledQuery.query !== state.query) {
+    compiledQuery = { query: state.query, value: compileQuery(state.query) };
+  }
+  return compiledQuery.value;
 }
 
 // 검색어와 업로드 날짜 필터를 통과한 채널 영상
 function catalogList() {
-  const tokens = queryTokens();
+  const query = currentQuery();
   const range = dateRange();
   const list = state.catalog.videos
-    .filter((v) => inDateRange(v, range) && matchesQuery(v, tokens))
+    .filter((v) => inDateRange(v, range) && matchTitle(query, v.title))
     .map(toVideo);
   const dir = state.sort === 'oldest' ? 1 : -1;
   return list.sort((a, b) => dir * (Date.parse(a.publishedAt) - Date.parse(b.publishedAt)));
@@ -281,10 +283,10 @@ function catalogList() {
 
 // 시청 기록은 채널 목록과 무관하게 전체 기록에서 보여준다 (최근 본 순서)
 function historyList(status) {
-  const tokens = queryTokens();
+  const query = currentQuery();
   const range = dateRange();
   return Object.values(state.progress)
-    .filter((rec) => statusOf(rec.id) === status && inDateRange(rec, range) && matchesQuery(rec, tokens))
+    .filter((rec) => statusOf(rec.id) === status && inDateRange(rec, range) && matchTitle(query, rec.title))
     .sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
@@ -306,6 +308,7 @@ const grid = $('#grid');
 const message = $('#message');
 const moreBtn = $('#more-btn');
 const hint = $('#filter-hint');
+const queryHint = $('#query-hint');
 const syncStatus = $('#sync-status');
 const syncBtn = $('#sync-btn');
 const sortSelect = $('#sort');
@@ -451,6 +454,7 @@ function render() {
     watching: '재생했지만 끝까지 보지 않은 영상 (최근 본 순서)',
     completed: '끝까지 본 영상 (최근 본 순서)',
   }[state.filter];
+  renderQueryHint();
 
   const catalogEmpty = !state.catalog.videos.length;
 
@@ -480,7 +484,11 @@ function render() {
     }
   }
 
-  if (!videos.length && !(state.syncing && catalogEmpty) && !state.syncError) {
+  const query = currentQuery();
+  if (query.matchesNothing && !(state.syncing && catalogEmpty)) {
+    const words = query.unknown.map((w) => `'${w}'`).join(', ');
+    showMessage(`<p>${escapeHtml(words)}은(는) 한글 단어장에 없어서 찾을 수 없어요. 영어로 검색해 보세요. (예: 공룡 → dinosaur)</p>`);
+  } else if (!videos.length && !(state.syncing && catalogEmpty) && !state.syncError) {
     const filtered = period || state.query;
     const empty = {
       all: filtered ? '조건에 맞는 영상이 없습니다. 검색어나 기간을 바꿔 보세요.' : '영상이 없습니다.',
@@ -494,6 +502,16 @@ function render() {
   const remaining = videos.length - state.visibleCount;
   moreBtn.hidden = remaining <= 0;
   moreBtn.textContent = `더 보기 (${remaining.toLocaleString()}개 남음)`;
+}
+
+// 한글 검색어를 어떻게 바꿔 찾았는지 보여준다: "진흙탕 → muddy puddle · '뽀로로'는 단어장에 없어요"
+function renderQueryHint() {
+  const { translated, unknown } = currentQuery();
+  const parts = translated.map((t) => `${t.ko} → ${t.en.join(' / ')}`);
+  if (unknown.length) parts.push(`${unknown.map((w) => `'${w}'`).join(', ')}은(는) 단어장에 없어요`);
+  queryHint.hidden = !parts.length;
+  queryHint.textContent = parts.length ? `🔤 ${parts.join(' · ')}` : '';
+  queryHint.classList.toggle('has-unknown', unknown.length > 0);
 }
 
 // 필터 조건이 바뀌면 처음부터 다시 그린다
