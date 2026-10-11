@@ -170,8 +170,12 @@ async function apiGet(endpoint, params) {
   const res = await fetch(url);
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const reason = body?.error?.errors?.[0]?.reason || body?.error?.status || String(res.status);
-    throw new ApiError(body?.error?.message || `HTTP ${res.status}`, reason);
+    // details[].reason(ErrorInfo)가 가장 구체적이다: API_KEY_INVALID, API_KEY_HTTP_REFERRER_BLOCKED 등
+    const error = body?.error || {};
+    const reason = error.details?.find((d) => d.reason)?.reason
+      || error.errors?.[0]?.reason || error.status || String(res.status);
+    console.error('[YouTube API]', endpoint, res.status, reason, error.message);
+    throw new ApiError(error.message || `HTTP ${res.status}`, reason);
   }
   return body;
 }
@@ -188,7 +192,8 @@ async function fetchUploadsPage(pageToken) {
   let videos = [];
   if (ids.length) {
     // 비공개/삭제된 영상은 videos.list 응답에 없으므로 자연히 빠진다
-    const details = await apiGet('videos', { part: 'snippet,contentDetails', id: ids.join(','), maxResults: API_PAGE_SIZE });
+    // videos.list는 id와 maxResults를 함께 쓸 수 없다 (id 50개까지는 한 번에 모두 돌려준다)
+    const details = await apiGet('videos', { part: 'snippet,contentDetails', id: ids.join(',') });
     videos = details.items
       .filter((v) => v.snippet.liveBroadcastContent === 'none') // 진행 중/예정 라이브는 제외 (끝난 라이브는 포함)
       .map((v) => ({
@@ -394,22 +399,38 @@ function showMessage(html, { error = false } = {}) {
   message.innerHTML = html;
 }
 
-function errorText(err) {
+const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function errorGuide(err) {
   switch (err.reason) {
     case 'quotaExceeded':
     case 'dailyLimitExceeded':
+    case 'RATE_LIMIT_EXCEEDED':
       return '오늘의 YouTube API 사용량을 모두 썼습니다. 이미 받은 영상은 계속 볼 수 있고, 한국 시간 오후 4~5시(사용량 초기화) 이후에 다시 시도하면 이어서 받습니다.';
     case 'keyInvalid':
-    case 'badRequest':
     case 'API_KEY_INVALID':
-      return 'API 키가 올바르지 않습니다. 설정에서 키를 다시 확인해 주세요.';
+      return 'API 키가 올바르지 않습니다. Google Cloud Console의 "사용자 인증 정보"에서 키 옆의 복사 버튼으로 다시 복사해 붙여넣어 주세요. 키를 방금 만들었다면 몇 분 뒤에 다시 시도해 보세요.';
+    case 'API_KEY_HTTP_REFERRER_BLOCKED':
+      return `이 API 키는 지금 주소(${location.origin})에서 쓰도록 허용되어 있지 않습니다. Google Cloud Console → 사용자 인증 정보 → 키 수정 → "웹사이트 제한사항"에 ${location.origin}/* 를 추가하거나, 애플리케이션 제한사항을 "없음"으로 바꿔 주세요.`;
+    case 'API_KEY_IP_ADDRESS_BLOCKED':
+    case 'API_KEY_ANDROID_APP_BLOCKED':
+    case 'API_KEY_IOS_APP_BLOCKED':
+      return '이 API 키에 IP 주소나 앱 제한이 걸려 있어 웹에서 쓸 수 없습니다. 키 수정 → 애플리케이션 제한사항을 "웹사이트"(이 주소 추가) 또는 "없음"으로 바꿔 주세요.';
+    case 'API_KEY_SERVICE_BLOCKED':
+      return '이 API 키의 "API 제한사항"에 YouTube Data API v3가 빠져 있습니다. 키 수정 → API 제한사항에서 YouTube Data API v3를 선택해 주세요.';
     case 'accessNotConfigured':
-    case 'forbidden':
-    case 'PERMISSION_DENIED':
-      return 'API 키에 YouTube Data API v3 사용이 허용되어 있지 않습니다. Google Cloud Console에서 API를 사용 설정해 주세요.';
+    case 'SERVICE_DISABLED':
+      return '이 키의 Google Cloud 프로젝트에서 YouTube Data API v3가 사용 설정되어 있지 않습니다. API 라이브러리에서 "YouTube Data API v3"를 찾아 "사용"을 눌러 주세요. (켠 직후에는 몇 분 걸릴 수 있습니다)';
+    case 'playlistNotFound':
+      return 'Peppa Pig 공식 채널의 영상 목록을 찾지 못했습니다. 잠시 뒤 다시 시도해 주세요.';
     default:
-      return `영상 목록을 받지 못했습니다: ${err.message}`;
+      return '영상 목록을 받지 못했습니다.';
   }
+}
+
+// 안내 문구 + Google이 보낸 원래 오류(원인 파악용)
+function errorText(err) {
+  return `${escapeHtml(errorGuide(err))}<br><small>(${escapeHtml(err.reason)}: ${escapeHtml(err.message)})</small>`;
 }
 
 function render() {
