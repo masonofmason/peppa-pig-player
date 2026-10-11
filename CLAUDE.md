@@ -42,6 +42,10 @@ Browser app for browsing and watching videos from the official English Peppa Pig
     - English dictionary words match as whole words, allowing a trailing s/es/'s. The regex avoids lookbehind for old TV browsers.
     - If only unknown Korean was typed, nothing matches (`matchesNothing`).
     - To unit-test, copy both files into a dir with `{"type":"module"}` in package.json and import from Node.
+  - **Voice search** — Web Speech API, `SpeechRecognition || webkitSpeechRecognition`, `lang='ko-KR'`, interim results.
+    - The transcript is written into the search box, so it goes through the same Korean dictionary search.
+    - The button stays hidden unless the API exists. It is hidden again on `service-not-allowed` / `language-not-supported`, because some TV browsers expose the API but can't use it.
+    - To test without a mic, re-render the page via `document.write` with a mock class assigned to **both** globals. Chrome now has the unprefixed `SpeechRecognition`, so mocking only `webkitSpeechRecognition` is not enough.
   - **Title search, date filter and sort are all client-side** over the catalog, so they cost no quota. Cards render in chunks of `RENDER_STEP` with a "더 보기" button.
   - **Playback / progress tracking**: the YouTube IFrame Player API runs inside a `<dialog>`. Position is saved every 2s while playing, on pause, on close, and on `pagehide`. The `ENDED` state forces completion.
   - **Status rules** (`statusOf`): completed if the `ENDED` event fired, ≥95% watched, or ≤10s remaining; watching if position ≥3s; otherwise unwatched. Once completed, a video never goes back to watching on rewatch. Users can reset it or mark it completed from the player footer.
