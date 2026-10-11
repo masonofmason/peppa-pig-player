@@ -45,6 +45,11 @@
     <select id="f-day" aria-label="일"></select>
     <select id="f-hour" aria-label="시간"></select>
     <button id="date-reset" class="ghost small" type="button" hidden>초기화</button>
+    <select id="kind" class="kind" aria-label="영상 종류">
+      <option value="all">전체 영상</option>
+      <option value="regular">일반 영상만</option>
+      <option value="shorts">쇼츠만</option>
+    </select>
     <select id="sort" class="sort" aria-label="정렬">
       <option value="newest">최신 업로드순</option>
       <option value="oldest">오래된 업로드순</option>
@@ -113,6 +118,7 @@
         <img alt="" loading="lazy">
         <span class="duration"></span>
         <span class="badge"></span>
+        <span class="short-badge" hidden>쇼츠</span>
         <div class="progress"><div class="progress-fill"></div></div>
       </div>
       <div class="card-body">

@@ -29,6 +29,7 @@ const STORAGE = {
   date: 'pp.dateFilter',
   sort: 'pp.sort',
   voiceLang: 'pp.voiceLang',
+  kind: 'pp.kind',
 };
 const LEGACY_KEYS = ['pp.searchCache']; // 예전 검색 API 방식의 캐시
 
@@ -65,6 +66,7 @@ const state = {
   filter: load(STORAGE.filter, 'all'),
   date: { ...EMPTY_DATE, ...load(STORAGE.date, {}) }, // 업로드 날짜 필터 (로컬 시간 기준, 빈 문자열 = 전체)
   sort: load(STORAGE.sort, 'newest'),
+  kind: load(STORAGE.kind, 'all'), // 영상 종류: all | regular(일반 영상) | shorts(쇼츠)
   query: '',
   visibleCount: RENDER_STEP,
   syncing: false,
@@ -72,13 +74,32 @@ const state = {
 };
 
 /**
- * CatalogItem (저장용, 용량을 줄이려고 최소 필드만): { id, title, publishedAt, duration(sec) }
+ * CatalogItem (저장용, 용량을 줄이려고 최소 필드만): { id, title, publishedAt, duration(sec), short?: true }
  * Video (화면용): CatalogItem + { channel, thumb }
  * ProgressRecord: Video + { position(sec), completed(bool), updatedAt(ms) }
  */
 
 const thumbUrl = (id) => `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
 const toVideo = (item) => ({ ...item, channel: CHANNEL_NAME, thumb: thumbUrl(item.id) });
+
+// ---------- shorts ----------
+// YouTube API는 쇼츠 여부를 알려주지 않는다. 공식 채널은 쇼츠 제목/설명에 #Shorts를 붙이므로 그걸 보고,
+// 표시가 없어도 60초 이하면 쇼츠로 본다. (60초~3분짜리 쇼츠에 표시가 없으면 일반 영상으로 분류될 수 있다)
+const SHORTS_TAG = /#shorts?\b/i;
+const SHORTS_MAX_SEC = 60;
+
+// 목록을 받을 때 설명(description)까지 보고 판단해 short: true로 저장한다.
+// 예전에 받은 목록처럼 표시가 없으면 제목과 길이로 판단한다.
+function isShortVideo(v) {
+  if (v.short) return true;
+  return SHORTS_TAG.test(v.title || '') || (v.duration > 0 && v.duration <= SHORTS_MAX_SEC);
+}
+
+function matchesKind(v) {
+  if (state.kind === 'shorts') return isShortVideo(v);
+  if (state.kind === 'regular') return !isShortVideo(v);
+  return true;
+}
 
 function persistProgress() {
   save(STORAGE.progress, state.progress);
@@ -117,6 +138,7 @@ function updateProgress(video, position, duration, { forceComplete = false } = {
     thumb: video.thumb,
     publishedAt: video.publishedAt,
     duration: duration || video.duration || prev?.duration || 0,
+    ...(isShortVideo(video) || prev?.short ? { short: true } : {}),
     position: completed ? (duration || position) : position,
     completed,
     updatedAt: Date.now(),
@@ -200,12 +222,17 @@ async function fetchUploadsPage(pageToken) {
     const details = await apiGet('videos', { part: 'snippet,contentDetails', id: ids.join(',') });
     videos = details.items
       .filter((v) => v.snippet.liveBroadcastContent === 'none') // 진행 중/예정 라이브는 제외 (끝난 라이브는 포함)
-      .map((v) => ({
-        id: v.id,
-        title: v.snippet.title,
-        publishedAt: v.snippet.publishedAt,
-        duration: parseISODuration(v.contentDetails?.duration),
-      }));
+      .map((v) => {
+        const item = {
+          id: v.id,
+          title: v.snippet.title,
+          publishedAt: v.snippet.publishedAt,
+          duration: parseISODuration(v.contentDetails?.duration),
+        };
+        // 설명은 저장하지 않고(용량) 쇼츠 판단에만 쓴다
+        if (isShortVideo(item) || SHORTS_TAG.test(v.snippet.description || '')) item.short = true;
+        return item;
+      });
   }
   return { ids, videos, nextPageToken: list.nextPageToken || null };
 }
@@ -276,7 +303,7 @@ function catalogList() {
   const query = currentQuery();
   const range = dateRange();
   const list = state.catalog.videos
-    .filter((v) => inDateRange(v, range) && matchTitle(query, v.title))
+    .filter((v) => matchesKind(v) && inDateRange(v, range) && matchTitle(query, v.title))
     .map(toVideo);
   const dir = state.sort === 'oldest' ? 1 : -1;
   return list.sort((a, b) => dir * (Date.parse(a.publishedAt) - Date.parse(b.publishedAt)));
@@ -287,7 +314,7 @@ function historyList(status) {
   const query = currentQuery();
   const range = dateRange();
   return Object.values(state.progress)
-    .filter((rec) => statusOf(rec.id) === status && inDateRange(rec, range) && matchTitle(query, rec.title))
+    .filter((rec) => statusOf(rec.id) === status && matchesKind(rec) && inDateRange(rec, range) && matchTitle(query, rec.title))
     .sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
@@ -313,6 +340,8 @@ const queryHint = $('#query-hint');
 const syncStatus = $('#sync-status');
 const syncBtn = $('#sync-btn');
 const sortSelect = $('#sort');
+const kindSelect = $('#kind');
+const KIND_LABEL = { regular: '일반 영상만', shorts: '쇼츠만' };
 const cardTemplate = $('#card-template');
 
 function formatTime(sec) {
@@ -377,6 +406,8 @@ function renderCard(video) {
   node.querySelector('.card-title').textContent = video.title;
   node.querySelector('.card-title').title = video.title;
   node.querySelector('.progress-fill').style.width = `${progressRatio(video.id) * 100}%`;
+  const shortBadge = node.querySelector('.short-badge');
+  if (shortBadge) shortBadge.hidden = !isShortVideo(video);
 
   const badge = node.querySelector('.badge');
   if (status !== 'unwatched') {
@@ -446,9 +477,13 @@ function render() {
   message.hidden = true;
   sortSelect.hidden = !usesCatalog();
   sortSelect.value = state.sort;
+  if (kindSelect) {
+    kindSelect.value = state.kind;
+    kindSelect.classList.toggle('active', state.kind !== 'all');
+  }
 
   const period = dateLabel();
-  const prefix = [period && `${period}에 업로드된`, state.query && `"${state.query}" 검색`].filter(Boolean).join(' · ');
+  const prefix = [KIND_LABEL[state.kind], period && `${period}에 업로드된`, state.query && `"${state.query}" 검색`].filter(Boolean).join(' · ');
   hint.textContent = (prefix ? `${prefix} · ` : '') + {
     all: 'Peppa Pig 공식 채널 영상',
     unwatched: '아직 보지 않은 영상',
@@ -490,7 +525,7 @@ function render() {
     const words = query.unknown.map((w) => `'${w}'`).join(', ');
     showMessage(`<p>${escapeHtml(words)}은(는) 한글 단어장에 없어서 찾을 수 없어요. 영어로 검색해 보세요. (예: 공룡 → dinosaur)</p>`);
   } else if (!videos.length && !(state.syncing && catalogEmpty) && !state.syncError) {
-    const filtered = period || state.query;
+    const filtered = period || state.query || state.kind !== 'all';
     const empty = {
       all: filtered ? '조건에 맞는 영상이 없습니다. 검색어나 기간을 바꿔 보세요.' : '영상이 없습니다.',
       unwatched: lists.all.length ? '조건에 맞는 영상을 모두 시청했어요! 🎉' : '조건에 맞는 영상이 없습니다. 검색어나 기간을 바꿔 보세요.',
@@ -588,6 +623,12 @@ DATE_LEVELS.forEach((level) => {
   });
 });
 $('#date-reset').addEventListener('click', () => setDateFilter(EMPTY_DATE));
+
+kindSelect?.addEventListener('change', () => {
+  state.kind = kindSelect.value;
+  save(STORAGE.kind, state.kind);
+  resetAndRender();
+});
 
 sortSelect.addEventListener('change', () => {
   state.sort = sortSelect.value;

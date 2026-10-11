@@ -162,7 +162,16 @@ button:focus-visible, input:focus-visible, .card:focus-visible { outline: 3px so
 .date-filter select:disabled { opacity: 0.45; cursor: default; }
 .date-filter select.active { border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
 button.small { padding: 5px 12px; font-size: 13px; }
-.date-filter select.sort { margin-left: auto; }
+.date-filter select.kind { margin-left: auto; }
+
+/* 쇼츠 배지 (썸네일 오른쪽 위) */
+.short-badge {
+  position: absolute; right: 8px; top: 8px;
+  font-size: 12px; font-weight: 800;
+  padding: 3px 9px; border-radius: 999px;
+  background: #ff0033; color: #fff;
+}
+.short-badge[hidden] { display: none; }
 .date-filter select[hidden] { display: none; }
 
 .toolbar {
@@ -301,5 +310,5 @@ dialog::backdrop { background: rgba(20, 8, 14, 0.7); }
   .grid { grid-template-columns: 1fr; }
   /* iOS는 16px 미만 입력칸에 포커스하면 화면을 확대하므로 16px로 맞춘다 */
   .date-filter select { font-size: 16px; padding: 5px 8px; }
-  .date-filter select.sort { margin-left: 0; }
+  .date-filter select.sort, .date-filter select.kind { margin-left: 0; }
 }
