@@ -23,6 +23,9 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      # 브라우저가 예전 JS/CSS를 쓰지 않도록 ?v=dev 를 커밋 해시로 바꾼다 (GitHub Pages는 10분 캐시)
+      - name: Stamp asset versions
+        run: sed -i "s/?v=dev/?v=${GITHUB_SHA::7}/g" public/index.html public/*.js
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

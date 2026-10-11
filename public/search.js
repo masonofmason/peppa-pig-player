@@ -4,7 +4,7 @@
 //   groups: [ [george], [dinosaur], [cake] ]   (그룹끼리는 AND, 그룹 안의 단어는 OR)
 //   translated: [{ ko: '조지', en: ['george'] }, { ko: '공룡', en: ['dinosaur'] }]
 //   unknown: []                                 (단어장에 없는 한글 단어)
-import { KO_DICTIONARY, KO_NOISE } from './ko-dictionary.js';
+import { KO_DICTIONARY, KO_NOISE } from './ko-dictionary.js?v=dev';
 
 const HANGUL = /[ㄱ-ㆎ가-힣]/;
 const stripSpaces = (s) => s.replace(/\s+/g, '');

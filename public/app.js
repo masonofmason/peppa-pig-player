@@ -6,7 +6,7 @@
 // - 시청 기록: localStorage (브라우저별 저장)
 // - 한글 검색: search.js + ko-dictionary.js (단어장으로 영어 제목에서 찾기)
 
-import { compileQuery, matchTitle } from './search.js';
+import { compileQuery, matchTitle } from './search.js?v=dev';
 
 const API_BASE = 'https://www.googleapis.com/youtube/v3';
 const CHANNEL_ID = 'UCAOtE1V7Ots4DjM8JLlrYgg'; // Peppa Pig - Official Channel (영어)
@@ -875,7 +875,8 @@ function startVoiceSearch() {
   }
 }
 
-if (SpeechRecognition) {
+// 배포 직후 브라우저에 예전 index.html이 남아 있으면 버튼이 없을 수 있다. 그때는 음성 검색만 건너뛴다.
+if (SpeechRecognition && voiceBtn && voiceLangBtn) {
   voiceBtn.hidden = false;
   voiceLangBtn.hidden = false;
   renderVoiceLang();

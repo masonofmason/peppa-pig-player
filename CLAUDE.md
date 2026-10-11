@@ -17,6 +17,9 @@ Browser app for browsing and watching videos from the official English Peppa Pig
 - **Hosted copy:** https://masonofmason.github.io/peppa-pig-player/ (public repo `masonofmason/peppa-pig-player`).
 - **Pipeline:** `.github/workflows/pages.yml` deploys `public/` as-is on every push to `main`. There is no build step.
 - **Paths:** everything in `public/` must use relative paths, because the site is served under the `/peppa-pig-player/` subpath.
+- **Cache busting:** GitHub Pages sends `max-age=600`.
+  - Every JS/CSS reference (in `index.html`, and the ES-module imports in `app.js`/`search.js`) carries `?v=dev`. The workflow rewrites it to the short commit SHA, so new HTML never runs with stale cached JS. **Add `?v=dev` to any new asset reference or import.**
+  - A cached old `index.html` can still meet new JS for up to 10 minutes, so JS must tolerate missing new elements (see the guard on the voice buttons).
 - **No baked-in key:** `public/config.js` must keep `apiKey: ''` in the repo. The site is public, so users enter their own key per device.
 - **Mobile / PWA:** `manifest.webmanifest`, `icons/`, and Apple meta tags enable "Add to Home Screen". There is deliberately no service worker, so updates are never served stale.
 
@@ -48,7 +51,7 @@ Browser app for browsing and watching videos from the official English Peppa Pig
     - Korean-mode transliterations of English words ("버스데이") live in a dedicated section of `ko-dictionary.js`. `search.js` drops English filler words (`EN_STOPWORDS`) and normalizes curly apostrophes.
     - The transcript is written into the search box, so it goes through the same Korean dictionary search.
     - The button stays hidden unless the API exists. It is hidden again on `service-not-allowed` / `language-not-supported`, because some TV browsers expose the API but can't use it.
-    - To test without a mic, re-render the page via `document.write` with a mock class assigned to **both** globals. Chrome now has the unprefixed `SpeechRecognition`, so mocking only `webkitSpeechRecognition` is not enough.
+    - To test without a mic, re-render the page via `document.write` (replace `src="app.js?v=dev"` with a fresh query) with a mock class assigned to **both** globals. Chrome now has the unprefixed `SpeechRecognition`, so mocking only `webkitSpeechRecognition` is not enough.
   - **Title search, date filter and sort are all client-side** over the catalog, so they cost no quota. Cards render in chunks of `RENDER_STEP` with a "더 보기" button.
   - **Playback / progress tracking**: the YouTube IFrame Player API runs inside a `<dialog>`. Position is saved every 2s while playing, on pause, on close, and on `pagehide`. The `ENDED` state forces completion.
   - **Status rules** (`statusOf`): completed if the `ENDED` event fired, ≥95% watched, or ≤10s remaining; watching if position ≥3s; otherwise unwatched. Once completed, a video never goes back to watching on rewatch. Users can reset it or mark it completed from the player footer.
