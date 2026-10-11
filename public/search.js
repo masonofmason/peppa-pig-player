@@ -18,6 +18,16 @@ for (const [ko, en] of Object.entries(KO_DICTIONARY)) {
 const MAX_KEY_LEN = Math.max(...[...DICT.keys()].map((k) => k.length));
 const NOISE = [...KO_NOISE].sort((a, b) => b.length - a.length);
 
+// 영어로 말하거나 칠 때 붙는 군더더기 ("show me muddy puddles", "play the dinosaur episode")
+const EN_STOPWORDS = new Set([
+  'a', 'an', 'the', 'and', 'or', 'of', 'to', 'in', 'on', 'at', 'for', 'with', 'about', 'some', 'my',
+  'i', 'me', 'want', 'wanna', 'watch', 'see', 'show', 'play', 'find', 'search', 'please', 'can', 'you',
+  'video', 'videos', 'episode', 'episodes',
+]);
+
+// 제목과 검색어의 따옴표 모양을 맞춘다 (Peppa’s ↔ Peppa's)
+const normalize = (s) => s.toLowerCase().replace(/[‘’`]/g, "'");
+
 const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // 영어 단어가 제목에 "단어로서" 있는지 본다 (sea가 season에 걸리지 않도록).
@@ -83,7 +93,7 @@ export function compileQuery(query) {
   let hangul = '';
 
   // 한글 부분과 영어/숫자 부분을 나눈다. 한글은 이어 붙여 띄어쓰기와 무관하게 해석한다.
-  for (const token of query.toLowerCase().split(/\s+/).filter(Boolean)) {
+  for (const token of normalize(query).split(/\s+/).filter(Boolean)) {
     if (HANGUL.test(token)) {
       // "조지cake"처럼 붙어 있으면 한글/비한글로 다시 쪼갠다
       for (const part of token.match(/[ㄱ-ㆎ가-힣]+|[^ㄱ-ㆎ가-힣]+/g)) {
@@ -96,9 +106,13 @@ export function compileQuery(query) {
   }
   if (hangul) translateHangul(hangul, translated, unknown);
 
+  // 영어 군더더기는 빼되, 전부 군더더기면("the") 그대로 둔다
+  const meaningful = english.filter((e) => !EN_STOPWORDS.has(e));
+  const englishTerms = meaningful.length ? meaningful : english;
+
   const groups = [
     ...translated.map((t) => ({ type: 'words', patterns: t.en.map(wordPattern) })),
-    ...english.map((e) => ({ type: 'text', text: e })), // 직접 친 영어는 기존처럼 부분 일치
+    ...englishTerms.map((e) => ({ type: 'text', text: e })), // 직접 친 영어는 기존처럼 부분 일치
   ];
   return {
     groups,
@@ -111,7 +125,7 @@ export function compileQuery(query) {
 
 export function matchTitle(compiled, title) {
   if (compiled.matchesNothing) return false;
-  const t = (title || '').toLowerCase();
+  const t = normalize(title || '');
   return compiled.groups.every((g) =>
     g.type === 'text' ? t.includes(g.text) : g.patterns.some((re) => re.test(t)));
 }

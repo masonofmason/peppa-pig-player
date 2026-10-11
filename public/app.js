@@ -28,6 +28,7 @@ const STORAGE = {
   filter: 'pp.filter',
   date: 'pp.dateFilter',
   sort: 'pp.sort',
+  voiceLang: 'pp.voiceLang',
 };
 const LEGACY_KEYS = ['pp.searchCache']; // 예전 검색 API 방식의 캐시
 
@@ -781,7 +782,23 @@ $('#search-form').addEventListener('submit', (e) => {
 // 지원하지 않는 브라우저(대부분의 TV, Firefox)에서는 버튼을 숨긴다. 한국어로 인식한 뒤 한글 단어장 검색을 그대로 탄다.
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const voiceBtn = $('#voice-btn');
+const voiceLangBtn = $('#voice-lang');
 const DEFAULT_PLACEHOLDER = searchInput.placeholder;
+// 인식은 한 번에 한 언어만 된다. 영어는 페파피그의 영국식 발음에 맞춰 en-GB.
+const VOICE_LANGS = {
+  ko: { code: 'ko-KR', label: '한', name: '한국어', listening: '듣고 있어요… 한국어로 말해 주세요 🎤' },
+  en: { code: 'en-GB', label: 'EN', name: '영어', listening: '듣고 있어요… 영어로 말해 주세요 🎤' },
+};
+let voiceLang = VOICE_LANGS[load(STORAGE.voiceLang, 'ko')] ? load(STORAGE.voiceLang, 'ko') : 'ko';
+
+function renderVoiceLang() {
+  const lang = VOICE_LANGS[voiceLang];
+  const other = VOICE_LANGS[voiceLang === 'ko' ? 'en' : 'ko'];
+  voiceLangBtn.textContent = lang.label;
+  voiceLangBtn.dataset.lang = voiceLang;
+  voiceLangBtn.title = `음성 인식 언어: ${lang.name} (누르면 ${other.name})`;
+  voiceLangBtn.setAttribute('aria-label', voiceLangBtn.title);
+}
 const VOICE_ERRORS = {
   'not-allowed': '마이크 사용이 허용되지 않았어요. 주소창의 🔒(또는 설정)에서 마이크를 허용해 주세요.',
   'audio-capture': '마이크를 찾을 수 없어요.',
@@ -814,8 +831,9 @@ function applyVoiceQuery(text) {
 }
 
 function startVoiceSearch() {
+  const lang = VOICE_LANGS[voiceLang];
   recognition = new SpeechRecognition();
-  recognition.lang = 'ko-KR';
+  recognition.lang = lang.code;
   recognition.interimResults = true; // 말하는 동안 글자가 바로 보이게
   recognition.continuous = false;
   recognition.maxAlternatives = 1;
@@ -825,8 +843,15 @@ function startVoiceSearch() {
     applyVoiceQuery(text);
   };
   recognition.onerror = (e) => {
-    if (VOICE_UNSUPPORTED.includes(e.error)) {
+    if (e.error === 'language-not-supported' && voiceLang !== 'ko') {
+      // 이 언어만 안 되는 경우: 버튼은 두고 한국어로 되돌린다
+      voiceLang = 'ko';
+      save(STORAGE.voiceLang, voiceLang);
+      renderVoiceLang();
+      setVoicePlaceholder('이 브라우저는 영어 음성 인식을 지원하지 않아요. 한국어로 바꿨어요.', 4000);
+    } else if (VOICE_UNSUPPORTED.includes(e.error)) {
       voiceBtn.hidden = true;
+      voiceLangBtn.hidden = true;
       setVoicePlaceholder('이 브라우저는 음성 검색을 지원하지 않아요', 4000);
     } else if (e.error !== 'aborted') {
       setVoicePlaceholder(VOICE_ERRORS[e.error] || '음성 인식에 실패했어요. 다시 시도해 주세요.', 4000);
@@ -835,11 +860,11 @@ function startVoiceSearch() {
   recognition.onend = () => {
     setListening(false);
     recognition = null;
-    if (searchInput.placeholder === '듣고 있어요… 말해 주세요 🎤') setVoicePlaceholder(DEFAULT_PLACEHOLDER);
+    if (searchInput.placeholder === lang.listening) setVoicePlaceholder(DEFAULT_PLACEHOLDER);
   };
 
   searchInput.value = '';
-  setVoicePlaceholder('듣고 있어요… 말해 주세요 🎤');
+  setVoicePlaceholder(lang.listening);
   setListening(true);
   try {
     recognition.start();
@@ -852,9 +877,18 @@ function startVoiceSearch() {
 
 if (SpeechRecognition) {
   voiceBtn.hidden = false;
+  voiceLangBtn.hidden = false;
+  renderVoiceLang();
   voiceBtn.addEventListener('click', () => {
     if (recognition) recognition.stop(); // 듣는 중에 다시 누르면 멈춤
     else startVoiceSearch();
+  });
+  voiceLangBtn.addEventListener('click', () => {
+    if (recognition) recognition.abort(); // 듣는 중이면 멈추고 언어만 바꾼다
+    voiceLang = voiceLang === 'ko' ? 'en' : 'ko';
+    save(STORAGE.voiceLang, voiceLang);
+    renderVoiceLang();
+    setVoicePlaceholder(`음성 인식: ${VOICE_LANGS[voiceLang].name}`, 1500);
   });
 }
 

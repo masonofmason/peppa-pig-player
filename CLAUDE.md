@@ -42,7 +42,10 @@ Browser app for browsing and watching videos from the official English Peppa Pig
     - English dictionary words match as whole words, allowing a trailing s/es/'s. The regex avoids lookbehind for old TV browsers.
     - If only unknown Korean was typed, nothing matches (`matchesNothing`).
     - To unit-test, copy both files into a dir with `{"type":"module"}` in package.json and import from Node.
-  - **Voice search** — Web Speech API, `SpeechRecognition || webkitSpeechRecognition`, `lang='ko-KR'`, interim results.
+  - **Voice search** — Web Speech API, `SpeechRecognition || webkitSpeechRecognition`, interim results.
+    - The language toggle (`voiceLang`, persisted as `pp.voiceLang`) switches between `ko-KR` and `en-GB`, because recognition handles only one language at a time.
+    - `language-not-supported` while on EN falls back to Korean instead of hiding the button.
+    - Korean-mode transliterations of English words ("버스데이") live in a dedicated section of `ko-dictionary.js`. `search.js` drops English filler words (`EN_STOPWORDS`) and normalizes curly apostrophes.
     - The transcript is written into the search box, so it goes through the same Korean dictionary search.
     - The button stays hidden unless the API exists. It is hidden again on `service-not-allowed` / `language-not-supported`, because some TV browsers expose the API but can't use it.
     - To test without a mic, re-render the page via `document.write` with a mock class assigned to **both** globals. Chrome now has the unprefixed `SpeechRecognition`, so mocking only `webkitSpeechRecognition` is not enough.
