@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Peppa Pig Player</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐷</text></svg>">
+  <!-- 휴대폰 홈 화면에 앱처럼 추가하기 -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="theme-color" content="#e8457c">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Peppa Pig">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-icon" aria-hidden="true">🐷</span>
+      <span class="brand-name">Peppa Pig Player</span>
+    </div>
+    <form id="search-form" class="search" role="search">
+      <input id="search-input" type="search" placeholder="제목 검색 (예: muddy puddles, george)" aria-label="영상 제목 검색">
+      <button type="submit">검색</button>
+    </form>
+    <button id="settings-btn" class="icon-btn" type="button" title="설정" aria-label="설정">⚙</button>
+  </header>
+
+  <nav class="filters" role="tablist" aria-label="시청 상태 필터">
+    <button class="filter" role="tab" data-filter="all" aria-selected="true">전체 <span class="count" data-count="all"></span></button>
+    <button class="filter" role="tab" data-filter="unwatched" aria-selected="false">아직 안 본 영상 <span class="count" data-count="unwatched"></span></button>
+    <button class="filter" role="tab" data-filter="watching" aria-selected="false">보고 있는 영상 <span class="count" data-count="watching"></span></button>
+    <button class="filter" role="tab" data-filter="completed" aria-selected="false">본 영상 <span class="count" data-count="completed"></span></button>
+  </nav>
+
+  <div class="date-filter" role="group" aria-label="업로드 날짜 필터">
+    <span class="date-label">업로드 날짜</span>
+    <select id="f-year" aria-label="연도"></select>
+    <select id="f-month" aria-label="월"></select>
+    <select id="f-day" aria-label="일"></select>
+    <select id="f-hour" aria-label="시간"></select>
+    <button id="date-reset" class="ghost small" type="button" hidden>초기화</button>
+    <select id="sort" class="sort" aria-label="정렬">
+      <option value="newest">최신 업로드순</option>
+      <option value="oldest">오래된 업로드순</option>
+    </select>
+  </div>
+
+  <main>
+    <div class="toolbar">
+      <p id="filter-hint" class="hint"></p>
+      <div class="sync">
+        <span id="sync-status"></span>
+        <button id="sync-btn" class="ghost small" type="button" hidden>새 영상 확인</button>
+      </div>
+    </div>
+    <div id="message" class="message" hidden></div>
+    <section id="grid" class="grid" aria-live="polite"></section>
+    <div class="more-wrap">
+      <button id="more-btn" class="more-btn" type="button" hidden>더 보기</button>
+    </div>
+  </main>
+
+  <footer class="credit">made by HyeonSeok's Daddy</footer>
+
+  <!-- 플레이어 -->
+  <dialog id="player-dialog" class="player-dialog">
+    <div class="player-head">
+      <h2 id="player-title"></h2>
+      <button id="player-close" class="icon-btn" type="button" aria-label="닫기">✕</button>
+    </div>
+    <div class="player-frame"><div id="player"></div></div>
+    <div class="player-foot">
+      <span id="player-status" class="player-status"></span>
+      <div class="player-actions">
+        <button id="mark-completed" type="button">본 영상으로 표시</button>
+        <button id="reset-progress" type="button" class="ghost">시청 기록 지우기</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- 설정 -->
+  <dialog id="settings-dialog" class="settings-dialog">
+    <form id="settings-form" method="dialog">
+      <h2>YouTube API 키 설정</h2>
+      <p class="muted">영상 검색에는 YouTube Data API v3 키가 필요합니다. 키는 이 브라우저에만 저장됩니다.</p>
+      <ol class="steps">
+        <li><a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" rel="noopener">Google Cloud Console</a>에서 프로젝트를 만들고 <b>YouTube Data API v3</b>를 사용 설정합니다.</li>
+        <li><a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">사용자 인증 정보</a> → <b>API 키 만들기</b></li>
+        <li>발급된 키를 아래에 붙여넣습니다.</li>
+      </ol>
+      <label for="api-key-input">API 키</label>
+      <input id="api-key-input" type="password" autocomplete="off" spellcheck="false" placeholder="AIza...">
+      <div class="settings-actions">
+        <button id="clear-history" type="button" class="danger ghost">모든 시청 기록 삭제</button>
+        <span class="spacer"></span>
+        <!-- Enter 키가 "저장"을 누르도록 DOM상 먼저 두고, 화면 순서는 CSS order로 맞춘다 -->
+        <button id="save-settings" value="save" type="submit">저장</button>
+        <button value="cancel" type="submit" class="ghost">취소</button>
+      </div>
+    </form>
+  </dialog>
+
+  <template id="card-template">
+    <article class="card" tabindex="0">
+      <div class="thumb">
+        <img alt="" loading="lazy">
+        <span class="duration"></span>
+        <span class="badge"></span>
+        <div class="progress"><div class="progress-fill"></div></div>
+      </div>
+      <div class="card-body">
+        <h3 class="card-title"></h3>
+        <p class="card-meta"></p>
+      </div>
+    </article>
+  </template>
+
+  <script src="config.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

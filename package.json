@@ -1,0 +1,13 @@
+{
+  "name": "peppa-pig-player",
+  "version": "1.0.0",
+  "private": true,
+  "description": "YouTube에서 Peppa Pig 영어 영상을 찾아 보고 시청 상태(안 본/보는 중/본)를 관리하는 앱",
+  "scripts": {
+    "start": "node server.js",
+    "package": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package.ps1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

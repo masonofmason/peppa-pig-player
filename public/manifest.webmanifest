@@ -1,0 +1,16 @@
+{
+  "name": "Peppa Pig Player",
+  "short_name": "Peppa Pig",
+  "description": "Peppa Pig 공식 영어 채널 영상을 보고 시청 상태별로 관리하는 앱",
+  "lang": "ko",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#fff7fa",
+  "theme_color": "#e8457c",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
